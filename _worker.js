@@ -14,6 +14,7 @@ function routeByHosts(host) {
 	// 定义路由表
 	const routes = {
 		// 生产环境
+		"docker": "registry-1.docker.io",
 		"quay": "quay.io",
 		"gcr": "gcr.io",
 		"k8s-gcr": "k8s.gcr.io",
@@ -55,8 +56,11 @@ function makeRes(body, status = 200, headers = {}) {
  * 构造新的URL对象
  * @param {string} urlStr URL字符串
  */
-function newUrl(urlStr) {
+function newUrlFunc(urlStr, hub_host_base) {
 	try {
+		if (urlStr.toString().startsWith("/")) {
+			return new URL(urlStr, hub_host_base) // 相对路径则需要指定base的domain
+		}
 		return new URL(urlStr) // 尝试构造新的URL对象
 	} catch (err) {
 		return null // 构造失败返回null
@@ -352,10 +356,10 @@ export default {
 			let re = new RegExp(auth_url, 'g');
 			new_response_headers.set("Www-Authenticate", response_headers.get("Www-Authenticate").replace(re, workers_url));
 		}
-
+		
 		// 处理重定向
 		if (new_response_headers.get("Location")) {
-			return httpHandler(request, new_response_headers.get("Location"));
+			return httpHandler(request, new_response_headers.get("Location"), url.origin);
 		}
 
 		// 返回修改后的响应
@@ -372,7 +376,7 @@ export default {
  * @param {Request} req 请求对象
  * @param {string} pathname 请求路径
  */
-function httpHandler(req, pathname) {
+function httpHandler(req, pathname, hub_host_with_schema) {
 	const reqHdrRaw = req.headers;
 
 	// 处理预检请求
@@ -390,7 +394,7 @@ function httpHandler(req, pathname) {
 
 	let urlStr = pathname;
 
-	const urlObj = newUrl(urlStr);
+	const urlObj = newUrlFunc(urlStr, hub_host_with_schema);
 
 	/** @type {RequestInit} */
 	const reqInit = {
